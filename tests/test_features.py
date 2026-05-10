@@ -12,14 +12,15 @@ def test_naruto_signs_exist():
     assert len(NARUTO_SIGNS) == 6
 
 
-def test_create_feature_names_length():
+def test_create_feature_names_length_for_two_hands():
     names = create_feature_names()
 
-    assert len(names) == 63
-    assert names[0] == "lm_0_x"
-    assert names[1] == "lm_0_y"
-    assert names[2] == "lm_0_z"
-    assert names[-1] == "lm_20_z"
+    assert len(names) == 126
+    assert names[0] == "left_lm_0_x"
+    assert names[1] == "left_lm_0_y"
+    assert names[2] == "left_lm_0_z"
+    assert names[63] == "right_lm_0_x"
+    assert names[-1] == "right_lm_20_z"
 
 
 def test_normalize_landmarks_output_shape():
