@@ -2,7 +2,7 @@ import cv2
 import mediapipe as mp
 
 from src.data.save_sample import save_landmark_sample
-from src.features.extract import extract_features
+from src.features.extract import extract_two_hand_features
 from src.labels.naruto_signs import NARUTO_SIGNS
 
 
@@ -22,7 +22,7 @@ def collect_samples(label: str, camera_index: int = 0) -> None:
 
     with mp_hands.Hands(
         static_image_mode=False,
-        max_num_hands=1,
+        max_num_hands=2,
         min_detection_confidence=0.7,
         min_tracking_confidence=0.7,
     ) as hands:
@@ -37,20 +37,19 @@ def collect_samples(label: str, camera_index: int = 0) -> None:
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = hands.process(rgb_frame)
 
-            hand_landmarks = None
-            handedness = "Unknown"
+            hand_count = 0
 
             if results.multi_hand_landmarks:
-                hand_landmarks = results.multi_hand_landmarks[0]
+                hand_count = len(results.multi_hand_landmarks)
 
-                if results.multi_handedness:
-                    handedness = results.multi_handedness[0].classification[0].label
+                for hand_landmarks in results.multi_hand_landmarks:
+                    mp_drawing.draw_landmarks(
+                        frame,
+                        hand_landmarks,
+                        mp_hands.HAND_CONNECTIONS,
+                    )
 
-                mp_drawing.draw_landmarks(
-                    frame,
-                    hand_landmarks,
-                    mp_hands.HAND_CONNECTIONS,
-                )
+            ready_text = "READY" if hand_count == 2 else "NEED 2 HANDS"
 
             cv2.putText(
                 frame,
@@ -64,7 +63,7 @@ def collect_samples(label: str, camera_index: int = 0) -> None:
 
             cv2.putText(
                 frame,
-                f"Saved: {saved_count}",
+                f"Hands detected: {hand_count}/2",
                 (10, 65),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.8,
@@ -74,8 +73,28 @@ def collect_samples(label: str, camera_index: int = 0) -> None:
 
             cv2.putText(
                 frame,
-                "Press S = save | Q = quit",
+                f"Status: {ready_text}",
                 (10, 100),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (255, 255, 255),
+                2,
+            )
+
+            cv2.putText(
+                frame,
+                f"Saved: {saved_count}",
+                (10, 135),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (255, 255, 255),
+                2,
+            )
+
+            cv2.putText(
+                frame,
+                "Press S = save | Q = quit",
+                (10, 170),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.7,
                 (255, 255, 255),
@@ -87,13 +106,14 @@ def collect_samples(label: str, camera_index: int = 0) -> None:
             key = cv2.waitKey(1) & 0xFF
 
             if key == ord("s"):
-                if hand_landmarks is None:
-                    print("No hand detected. Sample not saved.")
+                features = extract_two_hand_features(results)
+
+                if features is None:
+                    print("Need exactly 2 hands detected. Sample not saved.")
                 else:
-                    features = extract_features(hand_landmarks)
-                    save_landmark_sample(label, handedness, features)
+                    save_landmark_sample(label=label, features=features)
                     saved_count += 1
-                    print(f"Saved {label} sample #{saved_count}")
+                    print(f"Saved {label} two-hand sample #{saved_count}")
 
             elif key == ord("q"):
                 break
