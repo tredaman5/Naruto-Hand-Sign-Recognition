@@ -1,5 +1,4 @@
 import csv
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -14,11 +13,10 @@ from src.data.save_sample import (
 def test_create_dataset_header_length():
     header = create_dataset_header()
 
-    assert len(header) == 65
+    assert len(header) == 127
     assert header[0] == "label"
-    assert header[1] == "handedness"
-    assert header[2] == "lm_0_x"
-    assert header[-1] == "lm_20_z"
+    assert header[1] == "left_lm_0_x"
+    assert header[-1] == "right_lm_20_z"
 
 
 def test_ensure_dataset_exists_creates_file(tmp_path):
@@ -37,11 +35,10 @@ def test_ensure_dataset_exists_creates_file(tmp_path):
 
 def test_save_landmark_sample_adds_row(tmp_path):
     dataset_path = tmp_path / "landmarks.csv"
-    features = np.random.rand(63)
+    features = np.random.rand(126)
 
     save_landmark_sample(
         label="tiger",
-        handedness="Right",
         features=features,
         dataset_path=dataset_path,
     )
@@ -52,18 +49,16 @@ def test_save_landmark_sample_adds_row(tmp_path):
     assert len(rows) == 2
     assert rows[0] == create_dataset_header()
     assert rows[1][0] == "tiger"
-    assert rows[1][1] == "Right"
-    assert len(rows[1]) == 65
+    assert len(rows[1]) == 127
 
 
 def test_save_landmark_sample_rejects_bad_feature_length(tmp_path):
     dataset_path = tmp_path / "landmarks.csv"
-    bad_features = np.random.rand(20)
+    bad_features = np.random.rand(63)
 
     with pytest.raises(ValueError):
         save_landmark_sample(
             label="tiger",
-            handedness="Right",
             features=bad_features,
             dataset_path=dataset_path,
         )
