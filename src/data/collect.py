@@ -1,3 +1,5 @@
+import time
+
 import cv2
 import mediapipe as mp
 
@@ -6,7 +8,11 @@ from src.features.extract import extract_two_hand_features
 from src.labels.naruto_signs import NARUTO_SIGNS
 
 
-def collect_samples(label: str, camera_index: int = 0) -> None:
+def collect_samples(
+    label: str,
+    camera_index: int = 0,
+    capture_interval: float = 1.0,
+) -> None:
     if label not in NARUTO_SIGNS:
         raise ValueError(f"Invalid label '{label}'. Choose from: {NARUTO_SIGNS}")
 
@@ -19,12 +25,14 @@ def collect_samples(label: str, camera_index: int = 0) -> None:
         raise RuntimeError("Could not open webcam.")
 
     saved_count = 0
+    auto_capture = False
+    last_capture_time = 0.0
 
     with mp_hands.Hands(
         static_image_mode=False,
         max_num_hands=2,
-        min_detection_confidence=0.7,
-        min_tracking_confidence=0.7,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5,
     ) as hands:
         while True:
             success, frame = cap.read()
@@ -49,71 +57,54 @@ def collect_samples(label: str, camera_index: int = 0) -> None:
                         mp_hands.HAND_CONNECTIONS,
                     )
 
-            ready_text = "READY" if hand_count == 2 else "NEED 2 HANDS"
+            features = extract_two_hand_features(results)
+            ready = features is not None
 
-            cv2.putText(
-                frame,
-                f"Label: {label}",
-                (10, 30),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,
-                (255, 255, 255),
-                2,
-            )
+            now = time.time()
 
-            cv2.putText(
-                frame,
-                f"Hands detected: {hand_count}/2",
-                (10, 65),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,
-                (255, 255, 255),
-                2,
-            )
+            if auto_capture and ready and now - last_capture_time >= capture_interval:
+                save_landmark_sample(label=label, features=features)
+                saved_count += 1
+                last_capture_time = now
+                print(f"Auto-saved {label} two-hand sample #{saved_count}")
 
-            cv2.putText(
-                frame,
-                f"Status: {ready_text}",
-                (10, 100),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,
-                (255, 255, 255),
-                2,
-            )
+            status_text = "READY" if ready else "NEED 2 HANDS"
+            auto_text = "ON" if auto_capture else "OFF"
 
-            cv2.putText(
-                frame,
-                f"Saved: {saved_count}",
-                (10, 135),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,
-                (255, 255, 255),
-                2,
-            )
+            cv2.putText(frame, f"Label: {label}", (10, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
 
-            cv2.putText(
-                frame,
-                "Press S = save | Q = quit",
-                (10, 170),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (255, 255, 255),
-                2,
-            )
+            cv2.putText(frame, f"Hands detected: {hand_count}/2", (10, 65),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+
+            cv2.putText(frame, f"Status: {status_text}", (10, 100),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+
+            cv2.putText(frame, f"Auto Capture: {auto_text}", (10, 135),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+
+            cv2.putText(frame, f"Saved: {saved_count}", (10, 170),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+
+            cv2.putText(frame, "A = auto on/off | S = save once | Q = quit", (10, 205),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
 
             cv2.imshow("Naruto Hand Sign Data Collector", frame)
 
             key = cv2.waitKey(1) & 0xFF
 
-            if key == ord("s"):
-                features = extract_two_hand_features(results)
+            if key == ord("a"):
+                auto_capture = not auto_capture
+                last_capture_time = 0.0
+                print(f"Auto-capture {'ON' if auto_capture else 'OFF'}")
 
-                if features is None:
-                    print("Need exactly 2 hands detected. Sample not saved.")
-                else:
+            elif key == ord("s"):
+                if ready:
                     save_landmark_sample(label=label, features=features)
                     saved_count += 1
                     print(f"Saved {label} two-hand sample #{saved_count}")
+                else:
+                    print("Need exactly 2 hands detected. Sample not saved.")
 
             elif key == ord("q"):
                 break
